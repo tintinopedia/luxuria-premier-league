@@ -42,7 +42,7 @@ export default function Header() {
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 sm:px-6">
         <button className="rounded-lg p-2 text-slate-300 lg:hidden" onClick={() => setMobile(!mobile)} aria-label="Menu">☰</button>
         <Link href="/" className="flex items-center gap-2.5">
-          <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-gold-300 to-gold-500 font-display text-sm font-bold text-ink-950">LPL</div>
+          <img src="/logo-160.png" alt="Luxuria Premier League" width={44} height={44} className="h-11 w-11 rounded-full ring-1 ring-gold-400/40" />
           <div className="hidden leading-tight sm:block">
             <div className="font-display text-[15px] font-semibold uppercase tracking-wider text-white">Luxuria</div>
             <div className="text-[10px] font-semibold uppercase tracking-[0.25em] text-gold-400">Premier League</div>

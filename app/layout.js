@@ -10,7 +10,7 @@ export const metadata = {
   manifest: '/manifest.webmanifest',
   applicationName: 'LPL',
   appleWebApp: { capable: true, title: 'LPL', statusBarStyle: 'black-translucent' },
-  icons: { icon: '/icons/icon-192.png', apple: '/icons/apple-touch-icon.png' },
+  icons: { icon: [{ url: '/icons/favicon-48.png', sizes: '48x48' }, { url: '/icons/icon-192.png', sizes: '192x192' }], apple: '/icons/apple-touch-icon.png' },
 };
 
 export const viewport = {

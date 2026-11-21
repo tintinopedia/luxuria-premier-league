@@ -34,9 +34,12 @@ export default function Home() {
       <div className="mx-auto max-w-7xl space-y-14 px-4 py-8 sm:px-6">
         {!loading && !user && (
           <div className="card flex flex-col items-start justify-between gap-4 bg-gradient-to-r from-gold-400/10 to-transparent p-5 sm:flex-row sm:items-center">
-            <div>
+            <div className="flex items-center gap-4">
+              <img src="/icons/icon-192.png" alt="" className="h-16 w-16 rounded-full ring-1 ring-gold-400/40" />
+              <div>
               <div className="font-display text-xl font-semibold uppercase tracking-wide text-white">Playing in the league?</div>
               <p className="text-sm text-slate-400">Sign up with Google to create your player profile and track your stats.</p>
+              </div>
             </div>
             <button onClick={signIn} className="btn-primary"><GoogleIcon /> Sign up with Google</button>
           </div>
