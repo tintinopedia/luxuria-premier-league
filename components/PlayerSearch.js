@@ -40,11 +40,11 @@ export default function PlayerSearch() {
 }
 
 // Smart picker used by scorer and CMS: search by full name or on-field name
-export function PlayerPicker({ label, value, onChange, prefer = [], exclude = [], placeholder = 'Search by name or on-field name' }) {
+export function PlayerPicker({ label, value, onChange, prefer = [], exclude = [], only = null, placeholder = 'Search by name or on-field name' }) {
   const { players, playerMap } = useData();
   const [q, setQ] = useState('');
   const pool = players
-    .filter((p) => !exclude.includes(p.id) && matchPlayer(p, q))
+    .filter((p) => !exclude.includes(p.id) && (!only || only.includes(p.id)) && matchPlayer(p, q))
     .sort((a, b) => (prefer.includes(b.id) ? 1 : 0) - (prefer.includes(a.id) ? 1 : 0) || pname(a).localeCompare(pname(b)))
     .slice(0, q ? 12 : 8);
   const sel = value ? playerMap[value] : null;
@@ -70,7 +70,7 @@ export function PlayerPicker({ label, value, onChange, prefer = [], exclude = []
                 <Avatar src={p.photoURL} name={p.fullName} size={28} />
                 <span className="truncate text-sm text-slate-200">{p.fullName}</span>
                 {p.onFieldName && <span className="truncate text-xs text-slate-500">“{p.onFieldName}”</span>}
-                {prefer.includes(p.id) && <span className="ml-auto text-[10px] font-bold uppercase tracking-wider text-gold-400">Squad</span>}
+                {!only && prefer.includes(p.id) && <span className="ml-auto text-[10px] font-bold uppercase tracking-wider text-gold-400">Squad</span>}
               </button>
             ))}
             {pool.length === 0 && <div className="px-2 py-2 text-xs text-slate-500">No match</div>}

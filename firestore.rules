@@ -16,33 +16,54 @@ service cloud.firestore {
               'perms.add','perms.edit','perms.delete','perms.deactivate'];
     }
 
+    function myEmail() { return request.auth.token.email.lower(); }
+    function inviteRef() { return /databases/$(database)/documents/invites/$(myEmail()); }
+    function profileKeys() {
+      return ['fullName','onFieldName','photoURL','skill','battingStyle','bowlingStyle','age','updatedAt'];
+    }
+
     // Private account records (email, status, roles, permissions)
     match /users/{uid} {
-      allow read: if (signedIn() && request.auth.uid == uid) || canAny(adminPerms());
-      allow create: if signedIn() && request.auth.uid == uid
-        && request.resource.data.roles.size() == 0
-        && request.resource.data.permissions.size() == 0
-        && ((request.resource.data.status == 'new' && request.resource.data.isSuperAdmin == false) || isSuper());
+      allow read: if (signedIn() && request.auth.uid == uid) || canAny(adminPerms().concat(['users.edit']));
+      allow create: if signedIn() && request.auth.uid == uid && (
+        // normal Google sign-up
+        (request.resource.data.status == 'new' && request.resource.data.isSuperAdmin == false
+          && request.resource.data.roles.size() == 0 && request.resource.data.permissions.size() == 0)
+        || isSuper()
+        // user pre-created by an admin: must match the invite exactly
+        || (request.auth.token.email_verified == true && exists(inviteRef())
+          && request.resource.data.status == 'approved' && request.resource.data.isSuperAdmin == false
+          && request.resource.data.roles == get(inviteRef()).data.roles
+          && request.resource.data.permissions == get(inviteRef()).data.permissions
+          && request.resource.data.playerId == get(inviteRef()).data.playerId));
       allow update: if
         // a user editing their own profile; can only move new/rejected -> pending
         (signedIn() && request.auth.uid == uid
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
-               ['fullName','onFieldName','photoURL','skill','battingStyle','bowlingStyle','age',
-                'status','submittedAt','updatedAt','lastLoginAt','displayName','googlePhoto'])
+               profileKeys().concat(['status','submittedAt','lastLoginAt','displayName','googlePhoto']))
           && (request.resource.data.status == resource.data.status
               || (resource.data.status in ['new','rejected'] && request.resource.data.status == 'pending')))
         || isSuper()
         || (canAny(adminPerms())
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
-                 ['status','roles','permissions','approvedAt','approvedBy']));
+                 ['status','roles','permissions','approvedAt','approvedBy']))
+        || (can('users.edit') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(profileKeys()));
       allow delete: if can('users.delete');
+    }
+
+    // Users created manually by admins, waiting for their first Google sign-in (doc id = lower-case email)
+    match /invites/{email} {
+      allow read: if (signedIn() && myEmail() == email) || canAny(['users.create','users.delete','users.edit']);
+      allow create: if can('users.create');
+      allow update: if canAny(adminPerms().concat(['users.edit']));
+      allow delete: if canAny(['users.create','users.delete']) || (signedIn() && myEmail() == email);
     }
 
     // Public player profiles
     match /players/{pid} {
       allow read: if true;
-      allow create, update: if canAny(['users.approve','users.create','teams.manage'])
-        || (signedIn() && request.auth.uid == pid && approved());
+      allow create, update: if canAny(['users.approve','users.create','users.edit','teams.manage'])
+        || (approved() && get(meRef()).data.get('playerId', request.auth.uid) == pid);
       allow delete: if can('users.delete');
     }
 
@@ -66,7 +87,7 @@ service cloud.firestore {
     match /matches/{mid} {
       allow read: if true;
       allow create, delete: if can('tournaments.manage');
-      allow update: if canAny(['tournaments.manage','score.update','score.edit','score.delete']);
+      allow update: if canAny(['tournaments.manage','score.update','score.edit','score.delete','playingxi.manage']);
 
       match /balls/{bid} {
         allow read: if true;

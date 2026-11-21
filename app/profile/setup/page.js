@@ -10,7 +10,7 @@ import ProfileForm from '@/components/ProfileForm';
 import { GoogleIcon } from '@/components/Header';
 
 export default function ProfileSetup() {
-  const { user, profile, loading, isSuper, signIn } = useAuth();
+  const { user, profile, loading, isSuper, signIn, playerId } = useAuth();
   const router = useRouter();
   const [done, setDone] = useState(false);
   useEffect(() => { if (done && profile?.status === 'pending') router.replace('/pending'); }, [done, profile, router]);
@@ -33,8 +33,8 @@ export default function ProfileSetup() {
     if (!approved) { payload.status = 'pending'; payload.submittedAt = serverTimestamp(); }
     await updateDoc(doc(db(), 'users', user.uid), payload);
     if (approved) {
-      await setDoc(doc(db(), 'players', user.uid), { uid: user.uid, ...data, photoURL, updatedAt: serverTimestamp() }, { merge: true });
-      router.push(`/players/${user.uid}`);
+      await setDoc(doc(db(), 'players', playerId), { uid: user.uid, ...data, photoURL, updatedAt: serverTimestamp() }, { merge: true });
+      router.push(`/players/${playerId}`);
     } else setDone(true);
   }
 

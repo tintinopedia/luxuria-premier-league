@@ -12,6 +12,7 @@ import { ballDescription, ballLabel, ballTone, computeInnings, nextState, summar
 import { PlayerPicker } from '@/components/PlayerSearch';
 import GroundZones, { PitchMap } from '@/components/GroundZones';
 import { Avatar, Empty, Field, Modal, Spinner, TeamBadge } from '@/components/ui';
+import { XIGate, xiPlayers, xiReady } from '@/components/PlayingXI';
 
 export default function ScorerPage() {
   const { id } = useParams();
@@ -32,6 +33,7 @@ export default function ScorerPage() {
       <Link href={`/match/${id}`} className="btn-primary mt-6">View match centre</Link>
     </div></Wrap>
   );
+  if (!match.toss?.winner && !xiReady(match)) return <Wrap><XIGate match={match} /></Wrap>;
   if (!match.toss?.winner) return <Wrap><TossStep match={match} mref={mref} teamMap={teamMap} /></Wrap>;
 
   const inn = match.live?.inn || 1;
@@ -43,11 +45,14 @@ export default function ScorerPage() {
   const st = computeInnings(curBalls);
   const live = match.live || { inn };
   const started = !!(live.striker || live.nonStriker || live.bowler || curBalls.length);
-  const teamSize = Math.max(2, (batTeam?.members || []).length || 11);
+  // the confirmed playing XI drives who can be picked and when the innings is all out
+  const batXI = xiPlayers(match, innings.batting) || batTeam?.members || [];
+  const bowlXI = xiPlayers(match, innings.bowling) || bowlTeam?.members || [];
+  const teamSize = Math.max(2, batXI.length || 11);
   const maxBalls = (match.overs || 20) * 6;
   const target = inn === 2 ? (match.score?.[1]?.r || 0) + 1 : null;
   const inningsOver = st.legal >= maxBalls || st.wkts >= teamSize - 1 || (target && st.runs >= target);
-  const ctx = { match, mref, balls, curBalls, st, live, inn, batTeam, bowlTeam, teamSize, target, maxBalls };
+  const ctx = { match, mref, balls, curBalls, st, live, inn, batTeam, bowlTeam, teamSize, target, maxBalls, batXI, bowlXI };
 
   return (
     <Wrap>
@@ -164,7 +169,7 @@ function BreakStep({ match, mref, teamMap }) {
   );
 }
 
-function OpeningSetup({ mref, inn, batTeam, bowlTeam }) {
+function OpeningSetup({ mref, inn, batTeam, bowlTeam, batXI, bowlXI }) {
   const [bowler, setBowler] = useState(null);
   const [a, setA] = useState(null);
   const [b, setB] = useState(null);
@@ -180,10 +185,10 @@ function OpeningSetup({ mref, inn, batTeam, bowlTeam }) {
         <h2 className="section-title">Start of innings {inn}</h2>
         <p className="text-sm text-slate-400">{tname(batTeam)} batting · {tname(bowlTeam)} bowling</p>
       </div>
-      <PlayerPicker label="Who is bowling?" value={bowler} onChange={setBowler} prefer={bowlTeam?.members || []} exclude={[a, b].filter(Boolean)} />
+      <PlayerPicker label="Who is bowling?" value={bowler} onChange={setBowler} only={bowlXI} exclude={[a, b].filter(Boolean)} />
       <div className="grid gap-5 sm:grid-cols-2">
-        <PlayerPicker label="Opening batsman 1" value={a} onChange={(v) => { setA(v); if (striker === a) setStriker(null); }} prefer={batTeam?.members || []} exclude={[b, bowler].filter(Boolean)} />
-        <PlayerPicker label="Opening batsman 2" value={b} onChange={(v) => { setB(v); if (striker === b) setStriker(null); }} prefer={batTeam?.members || []} exclude={[a, bowler].filter(Boolean)} />
+        <PlayerPicker label="Opening batsman 1" value={a} onChange={(v) => { setA(v); if (striker === a) setStriker(null); }} only={batXI} exclude={[b, bowler].filter(Boolean)} />
+        <PlayerPicker label="Opening batsman 2" value={b} onChange={(v) => { setB(v); if (striker === b) setStriker(null); }} only={batXI} exclude={[a, bowler].filter(Boolean)} />
       </div>
       {a && b && (
         <Field label="Who takes strike?">
@@ -201,7 +206,7 @@ function OpeningSetup({ mref, inn, batTeam, bowlTeam }) {
   );
 }
 
-function NewBatter({ mref, live, st, batTeam }) {
+function NewBatter({ mref, live, st, batXI }) {
   const [pid, setPid] = useState(null);
   const outIds = st.order.filter((x) => st.batters[x].out);
   const slot = !live.striker ? 'striker' : 'nonStriker';
@@ -209,24 +214,24 @@ function NewBatter({ mref, live, st, batTeam }) {
     <div className="card space-y-5 p-6">
       <h2 className="section-title">New batsman</h2>
       <p className="-mt-3 text-sm text-slate-400">Comes in at the {slot === 'striker' ? "striker's" : "non-striker's"} end</p>
-      <PlayerPicker value={pid} onChange={setPid} prefer={batTeam?.members || []} exclude={[...outIds, live.striker, live.nonStriker].filter(Boolean)} />
+      <PlayerPicker value={pid} onChange={setPid} only={batXI} exclude={[...outIds, live.striker, live.nonStriker].filter(Boolean)} />
       <button disabled={!pid} onClick={() => updateDoc(mref, { live: { ...live, [slot]: pid, needNewBatter: false } })} className="btn-primary w-full">Confirm</button>
     </div>
   );
 }
 
-function NewBowler({ mref, live, bowlTeam, st }) {
+function NewBowler({ mref, live, bowlXI, st }) {
   const [pid, setPid] = useState(null);
   return (
     <div className="card space-y-5 p-6">
       <h2 className="section-title">Over {Math.floor(st.legal / 6) + 1}: who bowls?</h2>
-      <PlayerPicker value={pid} onChange={setPid} prefer={bowlTeam?.members || []} exclude={[live.prevBowler].filter(Boolean)} />
+      <PlayerPicker value={pid} onChange={setPid} only={bowlXI} exclude={[live.prevBowler].filter(Boolean)} />
       <button disabled={!pid} onClick={() => updateDoc(mref, { live: { ...live, bowler: pid, needNewBowler: false } })} className="btn-primary w-full">Start over</button>
     </div>
   );
 }
 
-function BallEntry({ match, mref, balls, curBalls, st, live, inn, bowlTeam }) {
+function BallEntry({ match, mref, balls, curBalls, st, live, inn, bowlXI }) {
   const { user, can } = useAuth();
   const { playerMap } = useData();
   const [type, setType] = useState('legit');
@@ -241,7 +246,7 @@ function BallEntry({ match, mref, balls, curBalls, st, live, inn, bowlTeam }) {
   const [length, setLength] = useState(null);
   const [comm, setComm] = useState('');
   const [busy, setBusy] = useState(false);
-  const fielders = (bowlTeam?.members || []).length ? bowlTeam.members : Object.keys(playerMap);
+  const fielders = bowlXI.length ? bowlXI : Object.keys(playerMap);
 
   function reset() {
     setType('legit'); setRuns(0); setCustom(''); setRunsTo('bat'); setWk(false); setWkKind('Bowled');
@@ -422,7 +427,7 @@ function EndMatch({ open, onClose, match, mref, inn, st, teamSize }) {
   const [winner, setWinner] = useState(sw);
   const [result, setResult] = useState(sr2);
   const [mom, setMom] = useState(null);
-  const pool = [...(teamMap[t1]?.members || []), ...(teamMap[t2]?.members || [])];
+  const pool = [...(xiPlayers(match, t1) || teamMap[t1]?.members || []), ...(xiPlayers(match, t2) || teamMap[t2]?.members || [])];
   async function save() {
     await updateDoc(mref, {
       status: 'completed', winner: winner || null, result, manOfMatch: mom || null, completedAt: serverTimestamp(),
@@ -440,7 +445,7 @@ function EndMatch({ open, onClose, match, mref, inn, st, teamSize }) {
           </select>
         </Field>
         <Field label="Result text"><input className="input" value={result} onChange={(e) => setResult(e.target.value)} /></Field>
-        <PlayerPicker label="Player of the match" value={mom} onChange={setMom} prefer={pool} />
+        <PlayerPicker label="Player of the match" value={mom} onChange={setMom} only={pool.length ? pool : null} />
         <button onClick={save} className="btn-primary w-full">Confirm &amp; end match</button>
       </div>
     </Modal>

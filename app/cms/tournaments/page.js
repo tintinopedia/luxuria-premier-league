@@ -8,8 +8,11 @@ import { fmtDate, fmtTime, toDate, toLocalInput } from '@/lib/format';
 import { statusLabel } from '@/lib/match';
 import { PlayerPicker } from '@/components/PlayerSearch';
 import { Empty, Field, Modal, Spinner, StatusPill, TeamBadge } from '@/components/ui';
+import { useAuth } from '@/lib/auth';
+import { PlayingXIModal, XIStatus } from '@/components/PlayingXI';
 
 export default function TournamentsPage() {
+  const { can } = useAuth();
   const tournaments = useLive(() => collection(db(), 'tournaments'), []);
   const [creating, setCreating] = useState(false);
   const [sel, setSel] = useState(null);
@@ -19,7 +22,7 @@ export default function TournamentsPage() {
     <div>
       <div className="mb-5 flex items-center justify-between">
         <div><h2 className="section-title">Tournaments</h2><p className="text-sm text-slate-400">Tournament setup, teams and match schedule</p></div>
-        <button onClick={() => setCreating(true)} className="btn-primary">+ New tournament</button>
+        {can('tournaments.manage') && <button onClick={() => setCreating(true)} className="btn-primary">+ New tournament</button>}
       </div>
       {!tournaments?.length ? <Empty>No tournaments yet.</Empty> : (
         <>
@@ -38,12 +41,12 @@ export default function TournamentsPage() {
 
 function TournamentForm({ t, onClose }) {
   const { teams } = useData();
-  const [f, setF] = useState({ name: t?.name || '', overs: t?.overs || 20, teams: t?.teams || [], venue: t?.venue || '' });
+  const [f, setF] = useState({ name: t?.name || '', overs: t?.overs || 20, playersPerSide: t?.playersPerSide || 11, teams: t?.teams || [], venue: t?.venue || '' });
   const toggle = (id) => setF({ ...f, teams: f.teams.includes(id) ? f.teams.filter((x) => x !== id) : [...f.teams, id] });
   async function save(e) {
     e.preventDefault();
     if (!f.name.trim()) return;
-    const data = { name: f.name.trim(), overs: Number(f.overs) || 20, teams: f.teams, venue: f.venue.trim() };
+    const data = { name: f.name.trim(), overs: Number(f.overs) || 20, playersPerSide: Number(f.playersPerSide) || 11, teams: f.teams, venue: f.venue.trim() };
     if (t) await updateDoc(doc(db(), 'tournaments', t.id), data);
     else await addDoc(collection(db(), 'tournaments'), { ...data, createdAt: serverTimestamp() });
     onClose();
@@ -54,8 +57,9 @@ function TournamentForm({ t, onClose }) {
         <Field label="Tournament name" required><input className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Luxuria Premier League 2026" /></Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Overs per innings" required><input type="number" min="1" max="50" className="input" value={f.overs} onChange={(e) => setF({ ...f, overs: e.target.value })} /></Field>
-          <Field label="Default venue"><input className="input" value={f.venue} onChange={(e) => setF({ ...f, venue: e.target.value })} /></Field>
+          <Field label="Players per side" required><input type="number" min="2" max="15" className="input" value={f.playersPerSide} onChange={(e) => setF({ ...f, playersPerSide: e.target.value })} /></Field>
         </div>
+        <Field label="Default venue"><input className="input" value={f.venue} onChange={(e) => setF({ ...f, venue: e.target.value })} /></Field>
         <Field label="Teams">
           {teams.length === 0 ? <p className="text-sm text-slate-500">Create teams first.</p> : (
             <div className="flex flex-wrap gap-2">
@@ -71,6 +75,8 @@ function TournamentForm({ t, onClose }) {
 
 function TournamentDetail({ t }) {
   const { teamMap } = useData();
+  const { can } = useAuth();
+  const [xiFor, setXiFor] = useState(null);
   const matches = useLive(() => query(collection(db(), 'matches'), where('tournamentId', '==', t.id)), [t.id]);
   const [edit, setEdit] = useState(false);
   const [matchForm, setMatchForm] = useState(null);
@@ -80,16 +86,16 @@ function TournamentDetail({ t }) {
       <div className="card flex flex-wrap items-center gap-4 p-5">
         <div className="flex-1">
           <div className="text-lg font-semibold text-white">{t.name}</div>
-          <div className="text-sm text-slate-400">{t.overs} overs · {(t.teams || []).length} teams{t.venue ? ` · ${t.venue}` : ''}</div>
+          <div className="text-sm text-slate-400">{t.overs} overs · {t.playersPerSide || 11} a side · {(t.teams || []).length} teams{t.venue ? ` · ${t.venue}` : ''}</div>
           <div className="mt-2 flex flex-wrap gap-2">{(t.teams || []).map((id) => <span key={id} className="chip"><TeamBadge team={teamMap[id]} size={16} />{tname(teamMap[id])}</span>)}</div>
         </div>
         <Link href={`/tournaments/${t.id}`} className="btn-ghost btn-sm">Public page ↗</Link>
-        <button onClick={() => setEdit(true)} className="btn-ghost btn-sm">Edit</button>
-        <button onClick={async () => { if (confirm('Delete tournament? Matches are kept.')) await deleteDoc(doc(db(), 'tournaments', t.id)); }} className="btn-danger btn-sm">Delete</button>
+        {can('tournaments.manage') && <button onClick={() => setEdit(true)} className="btn-ghost btn-sm">Edit</button>}
+        {can('tournaments.manage') && <button onClick={async () => { if (confirm('Delete tournament? Matches are kept.')) await deleteDoc(doc(db(), 'tournaments', t.id)); }} className="btn-danger btn-sm">Delete</button>}
       </div>
       <div className="flex items-center justify-between">
         <h3 className="section-title !text-lg">Matches</h3>
-        <button disabled={(t.teams || []).length < 2} onClick={() => setMatchForm({})} className="btn-primary btn-sm">+ Add match</button>
+        {can('tournaments.manage') && <button disabled={(t.teams || []).length < 2} onClick={() => setMatchForm({})} className="btn-primary btn-sm">+ Add match</button>}
       </div>
       {matches === undefined ? <Spinner /> : sorted.length === 0 ? <Empty>No matches scheduled.</Empty> : (
         <div className="card divide-y divide-white/[0.04]">
@@ -100,15 +106,18 @@ function TournamentDetail({ t }) {
                 <div className="font-semibold text-white">{tname(teamMap[m.teamA])} vs {tname(teamMap[m.teamB])}</div>
                 <div className="text-xs text-slate-400">{fmtDate(m.date)} · {fmtTime(m.date)}{m.venue ? ` · ${m.venue}` : ''}</div>
                 {m.result && <div className="text-xs text-emerald-300">{m.result}</div>}
+                <div className="mt-1.5"><XIStatus m={m} /></div>
               </div>
               <StatusPill label={statusLabel(m)} />
-              <Link href={`/score/${m.id}`} className="btn-ghost btn-sm">Score</Link>
-              <button onClick={() => setMatchForm(m)} className="btn-ghost btn-sm">Edit</button>
+              {can('playingxi.manage') && <button onClick={() => setXiFor(m)} className="btn-ghost btn-sm">Playing XI</button>}
+              {can('score.update') && <Link href={`/score/${m.id}`} className="btn-ghost btn-sm">Score</Link>}
+              {can('tournaments.manage') && <button onClick={() => setMatchForm(m)} className="btn-ghost btn-sm">Edit</button>}
             </div>
           ))}
         </div>
       )}
       {edit && <TournamentForm t={t} onClose={() => setEdit(false)} />}
+      {xiFor && <PlayingXIModal match={(matches || []).find((x) => x.id === xiFor.id) || xiFor} onClose={() => setXiFor(null)} />}
       {matchForm && <MatchForm t={t} m={matchForm.id ? matchForm : null} nextNo={sorted.length + 1} onClose={() => setMatchForm(null)} />}
     </div>
   );
@@ -123,7 +132,7 @@ function MatchForm({ t, m, nextNo, onClose }) {
   async function save(e) {
     e.preventDefault();
     if (!f.teamA || !f.teamB || f.teamA === f.teamB || !f.date) return alert('Pick two different teams and a date.');
-    const data = { tournamentId: t.id, teamA: f.teamA, teamB: f.teamB, date: Timestamp.fromDate(new Date(f.date)), venue: f.venue.trim(), matchNo: Number(f.matchNo) || nextNo, overs: t.overs || 20 };
+    const data = { tournamentId: t.id, teamA: f.teamA, teamB: f.teamB, date: Timestamp.fromDate(new Date(f.date)), venue: f.venue.trim(), matchNo: Number(f.matchNo) || nextNo, overs: t.overs || 20, playersPerSide: t.playersPerSide || 11 };
     if (m) await updateDoc(doc(db(), 'matches', m.id), { ...data, status: f.status, result: f.result, winner: f.winner || null, manOfMatch: f.manOfMatch || null });
     else await addDoc(collection(db(), 'matches'), { ...data, status: 'upcoming', createdAt: serverTimestamp() });
     onClose();

@@ -9,7 +9,25 @@ import { Empty } from './ui';
 export function Scorecard({ match: m, balls = [] }) {
   const { teamMap, playerMap } = useData();
   const name = (id) => pname(playerMap[id]);
-  if (!m.innings?.length) return <Empty>The scorecard will be available once the toss is done.</Empty>;
+  if (!m.innings?.length) {
+    const sides = [m.teamA, m.teamB].map((t) => ({ t, xi: m.playingXI?.[t] })).filter((x) => x.xi?.confirmed);
+    if (!sides.length) return <Empty>The scorecard will be available once the toss is done.</Empty>;
+    return (
+      <div className="grid gap-4 md:grid-cols-2">
+        {sides.map(({ t, xi }) => (
+          <div key={t} className="card p-4">
+            <h3 className="mb-3 font-display text-lg font-semibold text-white">{tname(teamMap[t])} <span className="text-sm font-normal text-slate-400">Playing XI</span></h3>
+            <ol className="space-y-1.5 text-sm">
+              {xi.players.map((id, i) => (
+                <li key={id} className="flex gap-3"><span className="w-5 text-slate-500">{i + 1}</span>
+                  <Link href={`/players/${id}`} className="text-slate-200 hover:text-gold-300">{name(id)}{xi.captain === id && ' (c)'}{xi.wicketKeeper === id && ' †'}</Link></li>
+              ))}
+            </ol>
+          </div>
+        ))}
+      </div>
+    );
+  }
   return (
     <div className="space-y-8">
       {m.innings.map((inn, i) => {
@@ -17,7 +35,9 @@ export function Scorecard({ match: m, balls = [] }) {
         if (!ib.length && (m.live?.inn || 1) < i + 1) return null;
         const st = computeInnings(ib);
         const team = teamMap[inn.batting];
-        const dnb = (team?.members || []).filter((id) => !st.order.includes(id));
+        const xi = m.playingXI?.[inn.batting];
+        const dnb = (xi?.players || team?.members || []).filter((id) => !st.order.includes(id));
+        const capt = xi?.captain ?? team?.captain, keeper = xi?.wicketKeeper ?? team?.wicketKeeper;
         return (
           <div key={i} className="card overflow-hidden">
             <div className="flex items-center justify-between bg-white/[0.03] px-4 py-3">
@@ -33,7 +53,7 @@ export function Scorecard({ match: m, balls = [] }) {
                     const notOut = !b.out;
                     return (
                       <tr key={id} className="border-t border-white/[0.04]">
-                        <td className="td"><Link href={`/players/${id}`} className="font-medium text-white hover:text-gold-300">{name(id)}{team?.captain === id && ' (c)'}{team?.wicketKeeper === id && ' †'}</Link></td>
+                        <td className="td"><Link href={`/players/${id}`} className="font-medium text-white hover:text-gold-300">{name(id)}{capt === id && ' (c)'}{keeper === id && ' †'}</Link></td>
                         <td className="td !text-left text-xs text-slate-400">{notOut ? (m.status === 'completed' ? 'not out' : 'batting') : dismissalText(b.out, name)}</td>
                         <td className="td font-bold text-white">{b.r}</td><td className="td text-slate-400">{b.b}</td><td className="td text-slate-400">{b.f}</td><td className="td text-slate-400">{b.s}</td><td className="td text-slate-400">{sr(b.r, b.b)}</td>
                       </tr>

@@ -22,7 +22,7 @@ const NAV = [
 ];
 
 export default function Header() {
-  const { user, profile, isSuper, can, canAny, signIn, signOut, loading } = useAuth();
+  const { user, profile, isSuper, can, canAny, signIn, signOut, loading, playerId } = useAuth();
   const path = usePathname();
   const [menu, setMenu] = useState(false);
   const [mobile, setMobile] = useState(false);
@@ -82,7 +82,7 @@ export default function Header() {
                     {isSuper && <div className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gold-400">Super Admin</div>}
                   </div>
                   {profile?.status === 'approved' && profile?.fullName && (
-                    <Link onClick={() => setMenu(false)} href={`/players/${user.uid}`} className="block rounded-lg px-3 py-2 text-sm hover:bg-white/5">My player profile</Link>
+                    <Link onClick={() => setMenu(false)} href={`/players/${playerId}`} className="block rounded-lg px-3 py-2 text-sm hover:bg-white/5">My player profile</Link>
                   )}
                   <Link onClick={() => setMenu(false)} href="/profile/setup" className="block rounded-lg px-3 py-2 text-sm hover:bg-white/5">Edit profile</Link>
                   {showCms && <Link onClick={() => setMenu(false)} href="/cms" className="block rounded-lg px-3 py-2 text-sm hover:bg-white/5">CMS</Link>}
