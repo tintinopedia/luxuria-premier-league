@@ -1,0 +1,24 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+    function isSuper() { return signedIn() && request.auth.token.email == 'ahaan@tintinopedia.com'; }
+    function perms() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.permissions;
+    }
+    function can(p) { return isSuper() || (signedIn() && p in perms()); }
+    function isImage() { return request.resource.contentType.matches('image/.*'); }
+
+    match /{all=**} { allow read: if true; }
+
+    match /avatars/{uid}/{file=**} {
+      allow write: if signedIn() && (request.auth.uid == uid || can('users.create') || can('users.approve'))
+        && request.resource.size < 5 * 1024 * 1024 && isImage();
+    }
+    match /players/{file=**} { allow write: if can('users.create') || can('teams.manage'); }
+    match /teams/{file=**}   { allow write: if can('teams.manage'); }
+    match /media/photos/{file=**} { allow write: if can('photos.add') && request.resource.size < 15 * 1024 * 1024; }
+    match /media/videos/{file=**} { allow write: if can('videos.add') && request.resource.size < 300 * 1024 * 1024; }
+    match /media/news/{file=**}   { allow write: if can('news.add') || can('blogs.add'); }
+  }
+}

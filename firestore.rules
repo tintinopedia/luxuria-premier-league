@@ -1,0 +1,98 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isSuper() {
+      return signedIn() && request.auth.token.email == 'ahaan@tintinopedia.com'
+        && request.auth.token.email_verified == true;
+    }
+    function meRef() { return /databases/$(database)/documents/users/$(request.auth.uid); }
+    function approved() { return signedIn() && exists(meRef()) && get(meRef()).data.status == 'approved'; }
+    function can(p) { return isSuper() || (approved() && p in get(meRef()).data.permissions); }
+    function canAny(ps) { return isSuper() || (approved() && get(meRef()).data.permissions.hasAny(ps)); }
+    function adminPerms() {
+      return ['users.approve','users.delete','users.create','roles.add','roles.edit','roles.delete',
+              'perms.add','perms.edit','perms.delete','perms.deactivate'];
+    }
+
+    // Private account records (email, status, roles, permissions)
+    match /users/{uid} {
+      allow read: if (signedIn() && request.auth.uid == uid) || canAny(adminPerms());
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.roles.size() == 0
+        && request.resource.data.permissions.size() == 0
+        && ((request.resource.data.status == 'new' && request.resource.data.isSuperAdmin == false) || isSuper());
+      allow update: if
+        // a user editing their own profile; can only move new/rejected -> pending
+        (signedIn() && request.auth.uid == uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+               ['fullName','onFieldName','photoURL','skill','battingStyle','bowlingStyle','age',
+                'status','submittedAt','updatedAt','lastLoginAt','displayName','googlePhoto'])
+          && (request.resource.data.status == resource.data.status
+              || (resource.data.status in ['new','rejected'] && request.resource.data.status == 'pending')))
+        || isSuper()
+        || (canAny(adminPerms())
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+                 ['status','roles','permissions','approvedAt','approvedBy']));
+      allow delete: if can('users.delete');
+    }
+
+    // Public player profiles
+    match /players/{pid} {
+      allow read: if true;
+      allow create, update: if canAny(['users.approve','users.create','teams.manage'])
+        || (signedIn() && request.auth.uid == pid && approved());
+      allow delete: if can('users.delete');
+    }
+
+    match /roles/{rid} {
+      allow read: if signedIn();
+      allow create: if can('roles.add');
+      allow update: if canAny(['roles.edit','perms.add','perms.edit','perms.delete','perms.deactivate']);
+      allow delete: if can('roles.delete');
+    }
+
+    match /teams/{id} {
+      allow read: if true;
+      allow write: if can('teams.manage');
+    }
+
+    match /tournaments/{id} {
+      allow read: if true;
+      allow write: if can('tournaments.manage');
+    }
+
+    match /matches/{mid} {
+      allow read: if true;
+      allow create, delete: if can('tournaments.manage');
+      allow update: if canAny(['tournaments.manage','score.update','score.edit','score.delete']);
+
+      match /balls/{bid} {
+        allow read: if true;
+        allow create: if can('score.update');
+        allow update: if canAny(['score.edit','commentary.update','commentary.delete']);
+        allow delete: if can('score.delete');
+      }
+    }
+
+    // collection-group reads for player statistics
+    match /{path=**}/balls/{bid} {
+      allow read: if true;
+    }
+
+    match /news/{id} {
+      allow read: if true;
+      allow create: if request.resource.data.kind == 'blog' ? can('blogs.add') : can('news.add');
+      allow update, delete: if canAny(['news.add','blogs.add']);
+    }
+    match /videos/{id} {
+      allow read: if true;
+      allow write: if can('videos.add');
+    }
+    match /photos/{id} {
+      allow read: if true;
+      allow write: if can('photos.add');
+    }
+  }
+}

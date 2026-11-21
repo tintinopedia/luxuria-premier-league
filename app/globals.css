@@ -1,0 +1,37 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Oswald:wght@500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: dark; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: Inter, system-ui, sans-serif;
+  @apply bg-ink-950 text-slate-200 antialiased min-h-screen;
+  background-image:
+    radial-gradient(1200px 500px at 85% -10%, rgba(245, 185, 66, 0.08), transparent 60%),
+    radial-gradient(900px 500px at -10% 10%, rgba(56, 189, 248, 0.06), transparent 60%);
+  background-attachment: fixed;
+}
+
+@layer components {
+  .card { @apply rounded-2xl border border-white/[0.06] bg-ink-900/80 shadow-[0_10px_40px_-20px_rgba(0,0,0,0.8)] backdrop-blur; }
+  .card-hover { @apply transition hover:border-gold-400/30 hover:-translate-y-0.5; }
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed; }
+  .btn-primary { @apply btn bg-gold-400 text-ink-950 hover:bg-gold-300 shadow-[0_6px_24px_-8px_rgba(245,185,66,0.6)]; }
+  .btn-ghost { @apply btn border border-white/10 bg-white/[0.03] text-slate-200 hover:bg-white/[0.08]; }
+  .btn-danger { @apply btn border border-live/40 bg-live/10 text-red-300 hover:bg-live/20; }
+  .btn-sm { @apply px-3 py-1.5 text-xs rounded-lg; }
+  .input { @apply w-full rounded-xl border border-white/10 bg-ink-800 px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 outline-none transition focus:border-gold-400/60 focus:ring-2 focus:ring-gold-400/20; }
+  .label { @apply mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-400; }
+  .chip { @apply inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-medium text-slate-300; }
+  .th { @apply px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400 text-right first:text-left; }
+  .td { @apply px-3 py-3 text-sm text-right tabular-nums first:text-left; }
+  .section-title { @apply font-display text-xl font-semibold uppercase tracking-wide text-white; }
+  .choice { @apply rounded-xl border border-white/10 bg-ink-800 px-3 py-3 text-sm font-semibold text-slate-200 transition hover:border-gold-400/50; }
+  .choice-on { @apply border-gold-400 bg-gold-400/15 text-gold-300; }
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
+.font-display { font-family: Oswald, Inter, sans-serif; }
